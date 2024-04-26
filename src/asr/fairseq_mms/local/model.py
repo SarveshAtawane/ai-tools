@@ -26,6 +26,7 @@ class Model():
         wav_file = request.wav_file
         ory_sample, sr = librosa.load(wav_file, sr=16000)
         inputs = self.processor(ory_sample, sampling_rate=16_000, return_tensors="pt")
+        inputs = inputs.to(self.device)
         with torch.no_grad():
             outputs = self.model(**inputs).logits
         
