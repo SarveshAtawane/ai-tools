@@ -1,0 +1,8 @@
+quart
+aiohttp
+pandas
+bertopic
+sentence_transformers
+numpy
+nltk
+scikit-learn
