@@ -1,69 +1,51 @@
 from transformers import pipeline
 from request import ModelRequest
+from regex_parse_ner import RegNERModel
+from bert_ner import BertNERModel
 
 class Model():
-    def __new__(cls, context):
-        cls.context = context
-        if not hasattr(cls, 'instance'):
-            cls.instance = super(Model, cls).__new__(cls)
-        cls.nlp_ner = pipeline("ner", model="GautamR/akai_ner", tokenizer="GautamR/akai_ner")
-        return cls.instance
+    def __init__(self, context):
+        self.context = context
+        print("Loading models...")
+        self.regex_model = RegNERModel()
+        print("Regex model loaded successfully")
+        self.bert_model = BertNERModel()
+        print("Bert model loaded successfully")
+
+    def combine_entities(self, reg_entities, bert_entities):
+        combined_entities = reg_entities
+
+        for entity in bert_entities:
+            if entity['entity_group'] not in combined_entities:
+                combined_entities[entity['entity_group']] = []
+
+            entity_info = {
+                'name': entity['word'],
+                'start': entity['start'],
+                'end': entity['end'],
+                'score': entity['score']
+            }
+
+            combined_entities[entity['entity_group']].append(entity_info)
+
+        return combined_entities
 
     async def inference(self, request: ModelRequest):
-        entities = self.nlp_ner(request.text)
-        return self.aggregate_entities(request.text, entities)
+        sentence = request.text
+        types = request.type
 
-    @staticmethod
-    def aggregate_entities(sentence, entity_outputs):
-        aggregated_entities = []
-        current_entity = None
+        reg_entities = self.regex_model.inference(sentence)
+        bert_entities = self.bert_model.inference(sentence)
 
-        for entity in entity_outputs:
-            entity_type = entity["entity"].split("-")[-1]
+        combined_entities = self.combine_entities(reg_entities, bert_entities)
 
-            # Handle subwords
-            if entity["word"].startswith("##"):
-                # If we encounter an I-PEST or any other I- entity
-                if "I-" in entity["entity"]:
-                    if current_entity:  # Add previous entity
-                        aggregated_entities.append(current_entity)
-                
-                    word_start = sentence.rfind(" ", 0, entity["start"]) + 1
-                    word_end = sentence.find(" ", entity["end"])
-                    if word_end == -1:
-                        word_end = len(sentence)
+        final_entities = {}
 
-                    current_entity = {
-                        "entity_group": entity_type,
-                        "score": float(entity["score"]),
-                        "word": sentence[word_start:word_end].replace('.','').replace('?',''),
-                        "start": float(word_start),
-                        "end": float(word_end)
-                    }
-                    aggregated_entities.append(current_entity)
-                    current_entity = None
+        if types is None:
+            return combined_entities
 
-                else:
-                    if current_entity:
-                    # If it's a subword but not an I- entity
-                        current_entity["word"] += entity["word"][2:]
-                        current_entity["end"] = entity["end"]
-                        current_entity["score"] = float((current_entity["score"] + entity["score"]) / 2)  # averaging scores
+        for entity_group in combined_entities:
+            if entity_group in types:
+                final_entities[entity_group] = combined_entities[entity_group]
 
-            # Handle full words
-            else:
-                if current_entity:
-                    aggregated_entities.append(current_entity)
-
-                current_entity = {
-                    "entity_group": entity_type,
-                    "score": float(entity["score"]),
-                    "word": entity["word"],
-                    "start": float(entity["start"]),
-                    "end": float(entity["end"])
-                }
-
-        if current_entity:
-            aggregated_entities.append(current_entity)
-
-        return aggregated_entities
+        return final_entities
