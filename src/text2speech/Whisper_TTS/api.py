@@ -38,8 +38,6 @@ async def text_to_speech():
             result = await model.inference(req)
 
         app.logger.info("Text-to-speech process completed successfully")
-        print(50*"BBB")
-        print(result['output_file'])
         return await send_file(result['output_file'])
     except Exception as e:
         app.logger.error(f"Error in text_to_speech: {str(e)}")
