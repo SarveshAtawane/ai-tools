@@ -1,4 +1,5 @@
+quart
 torch
 torchaudio
 whisperspeech
-requests
+webdataset
